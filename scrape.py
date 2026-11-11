@@ -1,5 +1,6 @@
 import json
 import time
+import sqlite3
 
 import requests
 from bs4 import BeautifulSoup
@@ -26,6 +27,35 @@ def extract(repos):
         rows.append((repo["name"], lang, repo["starsCount"]))
     return rows
 
+def save_to_db(rows, db_path="repos.db"):
+    """(名前, 言語, スター数) のリストをDBに保存する"""
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS repositories (
+            name     TEXT PRIMARY KEY,
+            language TEXT,
+            stars    INTEGER
+        )
+        """
+    )
+    conn.executemany(
+        "INSERT OR REPLACE INTO repositories (name, language, stars) VALUES (?, ?, ?)",
+        rows,
+    )
+    conn.commit()
+    conn.close()
+
+
+def show_db(db_path="repos.db"):
+    """保存したデータを SELECT で表示する"""
+    conn = sqlite3.connect(db_path)
+    print("件数:", conn.execute("SELECT COUNT(*) FROM repositories").fetchone()[0])
+    for row in conn.execute(
+        "SELECT name, language, stars FROM repositories ORDER BY stars DESC LIMIT 10"
+    ):
+        print(row)
+    conn.close()
 
 if __name__ == "__main__":
     MAX_PAGES = 3  # まずは3ページでテスト。動いたら None にする
@@ -43,5 +73,7 @@ if __name__ == "__main__":
             all_repos[row[0]] = row
         print(f"{page}/{last_page} ページ完了 (累計 {len(all_repos)} 件)")
         time.sleep(1)
+    save_to_db(list(all_repos.values()))
+    show_db()
 
     print("取得件数:", len(all_repos))
